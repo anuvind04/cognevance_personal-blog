@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Latest Posts</h1>
+    {% if current_user.is_authenticated %}
+        <a href="{{ url_for('create_post') }}" class="btn btn-primary">+ Write a Post</a>
+    {% endif %}
+</div>
+
+{% if posts %}
+    {% for post in posts %}
+    <div class="post-card">
+        <h2><a href="{{ url_for('post', post_id=post.id) }}">{{ post.title }}</a></h2>
+        <p class="meta">
+            By <strong>{{ post.author.username }}</strong> &middot;
+            {{ post.created_at.strftime('%B %d, %Y') }}
+        </p>
+        <p class="excerpt">{{ post.content[:200] }}{% if post.content|length > 200 %}...{% endif %}</p>
+        <a href="{{ url_for('post', post_id=post.id) }}" class="read-more">Read more &rarr;</a>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty-state">
+        <p>No posts yet.</p>
+        {% if current_user.is_authenticated %}
+            <a href="{{ url_for('create_post') }}" class="btn btn-primary">Write the first post!</a>
+        {% else %}
+            <a href="{{ url_for('register') }}" class="btn btn-primary">Register to get started</a>
+        {% endif %}
+    </div>
+{% endif %}
+{% endblock %}
