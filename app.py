@@ -1,9 +1,30 @@
 from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
+try:
+    from werkzeug.security import generate_password_hash, check_password_hash
+except ImportError:
+    import hashlib
+    import binascii
+    import hmac
+    import os
+
+    def generate_password_hash(password):
+        salt = os.urandom(16)
+        hash_bytes = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        return binascii.hexlify(salt).decode('utf-8') + ':' + binascii.hexlify(hash_bytes).decode('utf-8')
+
+    def check_password_hash(stored_hash, password):
+        try:
+            salt_hex, hash_hex = stored_hash.split(':', 1)
+        except ValueError:
+            return False
+        salt = binascii.unhexlify(salt_hex)
+        expected_hash = binascii.unhexlify(hash_hex)
+        computed_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        return hmac.compare_digest(computed_hash, expected_hash)
+
 from models import db, User, Post
 
-# ── App configuration ──────────────────────────────────────
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'change-this-to-a-random-string'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///blog.db'
@@ -11,7 +32,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
-# ── Login manager setup ────────────────────────────────────
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -22,23 +42,19 @@ login_manager.login_message_category = 'danger'
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# ── Create database tables ─────────────────────────────────
 with app.app_context():
     db.create_all()
 
-# ── Home page ──────────────────────────────────────────────
 @app.route('/')
 def home():
     posts = Post.query.order_by(Post.created_at.desc()).all()
     return render_template('home.html', posts=posts)
 
-# ── Single post page ───────────────────────────────────────
 @app.route('/post/<int:post_id>')
 def post(post_id):
     post = Post.query.get_or_404(post_id)
     return render_template('post.html', post=post)
 
-# ── Create a new post ──────────────────────────────────────
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_post():
@@ -55,7 +71,6 @@ def create_post():
         return redirect(url_for('home'))
     return render_template('create_post.html')
 
-# ── Edit a post ────────────────────────────────────────────
 @app.route('/edit/<int:post_id>', methods=['GET', 'POST'])
 @login_required
 def edit_post(post_id):
@@ -71,7 +86,6 @@ def edit_post(post_id):
         return redirect(url_for('post', post_id=post.id))
     return render_template('edit_post.html', post=post)
 
-# ── Delete a post ──────────────────────────────────────────
 @app.route('/delete/<int:post_id>', methods=['POST'])
 @login_required
 def delete_post(post_id):
@@ -84,7 +98,6 @@ def delete_post(post_id):
     flash('Post deleted.', 'success')
     return redirect(url_for('home'))
 
-# ── Register ───────────────────────────────────────────────
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
@@ -107,7 +120,6 @@ def register():
         return redirect(url_for('login'))
     return render_template('register.html')
 
-# ── Login ──────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
@@ -123,7 +135,6 @@ def login():
         flash('Incorrect email or password.', 'danger')
     return render_template('login.html')
 
-# ── Logout ─────────────────────────────────────────────────
 @app.route('/logout')
 @login_required
 def logout():
@@ -131,6 +142,5 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('home'))
 
-# ── Run ────────────────────────────────────────────────────
 if __name__ == '__main__':
     app.run(debug=True)
